@@ -1,0 +1,52 @@
+# Environnement Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Secrets
+.env
+
+# OS / éditeurs
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Logs / caches temporaires
+*.log
+outputs/scheduler/cache/
+outputs/scheduler/*.csv
+outputs/scheduler/*.json
+
+# Historique live généré
+outputs/history/
+
+# Fichiers temporaires
+*.tmp
+# Environnement et secrets
+.venv/
+venv/
+.env
+.env.*
+__pycache__/
+*.pyc
+.DS_Store
+
+# Donnees historiques et resultats
+outputs/
+data/
+datasets/
+logs/
+*.csv
+*.jsonl
+*.parquet
+*.sqlite3
+*.db
+*.pkl
+*.joblib
+*.log
+
+# Archives et sauvegardes
+*.zip
+*.bak
+*.xlsm

@@ -1,0 +1,865 @@
+========================================================================
+ETAPE 393 - INSPECTION LOGIQUE TEMPORELLE
+========================================================================
+
+FICHIER VERIFIE : collect_historical_dataset_v2.py
+Nombre de lignes : 2107
+
+========================================================================
+Chargement timeline / shotmap
+collect_historical_dataset_v2.py:1111-1155
+========================================================================
+ 1111 | def fetch_timeline_and_shotmap(
+ 1112 |     live87,
+ 1113 |     client: Any,
+ 1114 |     match_id: str,
+ 1115 | ) -> Tuple[
+ 1116 |     List[Dict[str, Any]],
+ 1117 |     List[Dict[str, Any]],
+ 1118 | ]:
+ 1119 |     timeline_payload = client.get(
+ 1120 |         f"/football/matches/{match_id}/timeline"
+ 1121 |     )
+ 1122 | 
+ 1123 |     shotmap_payload = client.get(
+ 1124 |         f"/football/matches/{match_id}/shotmap"
+ 1125 |     )
+ 1126 | 
+ 1127 |     timeline_events = [
+ 1128 |         dict(item)
+ 1129 |         for item in live87.as_list(timeline_payload)
+ 1130 |     ]
+ 1131 | 
+ 1132 |     shot_events = [
+ 1133 |         dict(item)
+ 1134 |         for item in live87.as_list(shotmap_payload)
+ 1135 |     ]
+ 1136 | 
+ 1137 |     return (
+ 1138 |         timeline_events,
+ 1139 |         shot_events,
+ 1140 |     )
+ 1141 | 
+ 1142 | 
+ 1143 | def reconstruct_live87(
+ 1144 |     live87,
+ 1145 |     target_match: Mapping[str, Any],
+ 1146 |     timeline_events: Sequence[Mapping[str, Any]],
+ 1147 |     shot_events: Sequence[Mapping[str, Any]],
+ 1148 | ) -> Tuple[Dict[str, Any], Dict[str, str]]:
+ 1149 |     home_team_id = live87.extract_team_id(
+ 1150 |         target_match,
+ 1151 |         "home",
+ 1152 |     )
+ 1153 | 
+ 1154 |     away_team_id = live87.extract_team_id(
+ 1155 |         target_match,
+
+========================================================================
+Appel reconstruction live87
+collect_historical_dataset_v2.py:1155-1185
+========================================================================
+ 1155 |         target_match,
+ 1156 |         "away",
+ 1157 |     )
+ 1158 | 
+ 1159 |     home_team_name = live87.extract_team_name(
+ 1160 |         target_match,
+ 1161 |         "home",
+ 1162 |     )
+ 1163 | 
+ 1164 |     away_team_name = live87.extract_team_name(
+ 1165 |         target_match,
+ 1166 |         "away",
+ 1167 |     )
+ 1168 | 
+ 1169 |     return live87.reconstruct_from_events(
+ 1170 |         timeline_events=timeline_events,
+ 1171 |         shot_events=shot_events,
+ 1172 |         home_team_id=home_team_id,
+ 1173 |         away_team_id=away_team_id,
+ 1174 |         home_team_name=home_team_name,
+ 1175 |         away_team_name=away_team_name,
+ 1176 |         snapshot_minute=SNAPSHOT_MINUTE,
+ 1177 |     )
+ 1178 | 
+ 1179 | 
+ 1180 | def validate_live87(
+ 1181 |     row: Mapping[str, Any],
+ 1182 | ) -> List[str]:
+ 1183 |     errors = []
+ 1184 | 
+ 1185 |     for feature in (
+
+========================================================================
+Assemblage prematch et live
+collect_historical_dataset_v2.py:1305-1355
+========================================================================
+ 1305 |     )
+ 1306 | 
+ 1307 |     season_id = prematch.lab.extract_season_id(
+ 1308 |         target_match
+ 1309 |     )
+ 1310 | 
+ 1311 |     status_row["home_team"] = home_team
+ 1312 |     status_row["away_team"] = away_team
+ 1313 |     status_row["competition_id"] = competition_id
+ 1314 |     status_row["season_id"] = season_id
+ 1315 |     status_row["utc_date"] = kickoff.isoformat() + "Z"
+ 1316 | 
+ 1317 |     # -------------------------------------------------------------------------
+ 1318 |     # PRE AS-OF kickoff
+ 1319 |     # -------------------------------------------------------------------------
+ 1320 | 
+ 1321 |     pre_features, pre_audit = prematch.build_prematch_asof(
+ 1322 |         lab=prematch.lab,
+ 1323 |         client=client,
+ 1324 |         target_match=target_match,
+ 1325 |         cutoff=kickoff,
+ 1326 |         xg_limit=xg_limit,
+ 1327 |         with_second_half=with_league_second_half,
+ 1328 |         preferred_bookmaker=preferred_bookmaker,
+ 1329 |     )
+ 1330 | 
+ 1331 |     # -------------------------------------------------------------------------
+ 1332 |     # LIVE 87 historical reconstruction
+ 1333 |     # -------------------------------------------------------------------------
+ 1334 | 
+ 1335 |     timeline_events, shot_events = fetch_timeline_and_shotmap(
+ 1336 |         live87=live87,
+ 1337 |         client=client,
+ 1338 |         match_id=match_id,
+ 1339 |     )
+ 1340 | 
+ 1341 |     live_features, live_provenance = reconstruct_live87(
+ 1342 |         live87=live87,
+ 1343 |         target_match=target_match,
+ 1344 |         timeline_events=timeline_events,
+ 1345 |         shot_events=shot_events,
+ 1346 |     )
+ 1347 | 
+ 1348 |     final_home, final_away = live87.extract_final_score(
+ 1349 |         target_match
+ 1350 |     )
+ 1351 | 
+ 1352 |     target_info = compute_target_after87(
+ 1353 |         live87=live87,
+ 1354 |         timeline_events=timeline_events,
+ 1355 |         final_home=final_home,
+
+FICHIER VERIFIE : v41_live87_own_goal_364.py
+Nombre de lignes : 4303
+
+========================================================================
+Extraction de la minute
+v41_live87_own_goal_364.py:870-920
+========================================================================
+  870 | 
+  871 | # =============================================================================
+  872 | # EVENT EXTRACTION
+  873 | # =============================================================================
+  874 | 
+  875 | def extract_event_minute(
+  876 |     event: Mapping[str, Any],
+  877 | ) -> Optional[int]:
+  878 |     values = [
+  879 |         event.get(
+  880 |             "minute"
+  881 |         ),
+  882 |         event.get(
+  883 |             "elapsed"
+  884 |         ),
+  885 |         event.get(
+  886 |             "time"
+  887 |         ),
+  888 |         event.get(
+  889 |             "match_minute"
+  890 |         ),
+  891 |         event.get(
+  892 |             "event_minute"
+  893 |         ),
+  894 |     ]
+  895 | 
+  896 |     time_obj = event.get(
+  897 |         "time"
+  898 |     )
+  899 | 
+  900 |     if isinstance(
+  901 |         time_obj,
+  902 |         Mapping,
+  903 |     ):
+  904 |         values = [
+  905 |             time_obj.get(
+  906 |                 "minute"
+  907 |             ),
+  908 |             time_obj.get(
+  909 |                 "elapsed"
+  910 |             ),
+  911 |         ] + values
+  912 | 
+  913 |     for value in values:
+  914 |         if isinstance(
+  915 |             value,
+  916 |             Mapping,
+  917 |         ):
+  918 |             continue
+  919 | 
+  920 |         if isinstance(
+
+========================================================================
+Filtrage initial des evenements
+v41_live87_own_goal_364.py:1585-1635
+========================================================================
+ 1585 | ) -> Tuple[
+ 1586 |     Dict[str, Any],
+ 1587 |     Dict[str, str],
+ 1588 | ]:
+ 1589 |     """
+ 1590 |     Retourne:
+ 1591 |       - features reconstruites
+ 1592 |       - source/provenance par feature
+ 1593 | 
+ 1594 |     Stratégie:
+ 1595 |       * score, corners, fouls, cards, offsides, subs, last events:
+ 1596 |         timeline horodatée
+ 1597 |       * shots / SOT:
+ 1598 |         shotmap horodatée prioritaire
+ 1599 |         timeline seulement si elle transporte explicitement des tirs
+ 1600 |     """
+ 1601 | 
+ 1602 |     features: Dict[str, Any] = {}
+ 1603 |     provenance: Dict[str, str] = {}
+ 1604 | 
+ 1605 |     timeline_before = []
+ 1606 | 
+ 1607 |     for event in timeline_events:
+ 1608 |         minute = extract_event_minute(
+ 1609 |             event
+ 1610 |         )
+ 1611 | 
+ 1612 |         if minute is None:
+ 1613 |             continue
+ 1614 | 
+ 1615 |         if minute > snapshot_minute:
+ 1616 |             continue
+ 1617 | 
+ 1618 |         timeline_before.append(
+ 1619 |             event
+ 1620 |         )
+ 1621 | 
+ 1622 |     shots_before = []
+ 1623 | 
+ 1624 |     for event in shot_events:
+ 1625 |         minute = extract_event_minute(
+ 1626 |             event
+ 1627 |         )
+ 1628 | 
+ 1629 |         if minute is None:
+ 1630 |             continue
+ 1631 | 
+ 1632 |         if minute > snapshot_minute:
+ 1633 |             continue
+ 1634 | 
+ 1635 |         shots_before.append(
+
+========================================================================
+Traitement des buts contre leur camp
+v41_live87_own_goal_364.py:1705-1745
+========================================================================
+ 1705 |                     in (
+ 1706 |                         "corner",
+ 1707 |                         "foul",
+ 1708 |                         "yellow",
+ 1709 |                         "red",
+ 1710 |                         "offside",
+ 1711 |                     )
+ 1712 |                 ):
+ 1713 |                     timeline_side_unknown[
+ 1714 |                         key
+ 1715 |                     ] += 1
+ 1716 | 
+ 1717 |         if flags[
+ 1718 |             "goal"
+ 1719 |         ]:
+ 1720 |             goal_kind = str(
+ 1721 |                 event.get("type", "")
+ 1722 |             ).strip().lower().replace("-", "_").replace(" ", "_")
+ 1723 | 
+ 1724 |             # Pour un but contre son camp, le beneficiaire
+ 1725 |             # est l'equipe opposee a celle du joueur.
+ 1726 |             if goal_kind == "own_goal":
+ 1727 |                 if side == "home":
+ 1728 |                     goal_side = "away"
+ 1729 |                 elif side == "away":
+ 1730 |                     goal_side = "home"
+ 1731 |                 else:
+ 1732 |                     goal_side = None
+ 1733 |             else:
+ 1734 |                 goal_side = side
+ 1735 | 
+ 1736 |             if goal_side == "home":
+ 1737 |                 score_home += 1
+ 1738 |             elif goal_side == "away":
+ 1739 |                 score_away += 1
+ 1740 | 
+ 1741 |             if (
+ 1742 |                 last_goal is None
+ 1743 |                 or minute > last_goal
+ 1744 |             ):
+ 1745 |                 last_goal = minute
+
+========================================================================
+Comptage des corners
+v41_live87_own_goal_364.py:1775-1810
+========================================================================
+ 1775 |         if flags[
+ 1776 |             "red"
+ 1777 |         ] and bucket is not None:
+ 1778 |             bucket[
+ 1779 |                 "red"
+ 1780 |             ] += 1
+ 1781 | 
+ 1782 |         if flags[
+ 1783 |             "offside"
+ 1784 |         ] and bucket is not None:
+ 1785 |             bucket[
+ 1786 |                 "offsides"
+ 1787 |             ] += 1
+ 1788 | 
+ 1789 |         if 80 <= minute <= snapshot_minute:
+ 1790 |             if flags[
+ 1791 |                 "corner"
+ 1792 |             ]:
+ 1793 |                 period[
+ 1794 |                     "corners_80_87"
+ 1795 |                 ] += 1
+ 1796 | 
+ 1797 |             if flags[
+ 1798 |                 "foul"
+ 1799 |             ]:
+ 1800 |                 period[
+ 1801 |                     "fouls_80_87"
+ 1802 |                 ] += 1
+ 1803 | 
+ 1804 |             if (
+ 1805 |                 flags[
+ 1806 |                     "yellow"
+ 1807 |                 ]
+ 1808 |                 or flags[
+ 1809 |                     "red"
+ 1810 |                 ]
+
+========================================================================
+Score a 87 minutes
+v41_live87_own_goal_364.py:1815-1850
+========================================================================
+ 1815 | 
+ 1816 |             if flags[
+ 1817 |                 "sub"
+ 1818 |             ]:
+ 1819 |                 period[
+ 1820 |                     "subs_80_87"
+ 1821 |                 ] += 1
+ 1822 | 
+ 1823 |     # Score features are safe only if timeline includes goal events with known side.
+ 1824 |     goal_events_seen = timeline_type_seen[
+ 1825 |         "goal"
+ 1826 |     ]
+ 1827 | 
+ 1828 |     if goal_events_seen > 0:
+ 1829 |         known_goals = (
+ 1830 |             score_home
+ 1831 |             + score_away
+ 1832 |         )
+ 1833 | 
+ 1834 |         if known_goals == goal_events_seen:
+ 1835 |             features[
+ 1836 |                 "score_87_home"
+ 1837 |             ] = score_home
+ 1838 | 
+ 1839 |             features[
+ 1840 |                 "score_87_away"
+ 1841 |             ] = score_away
+ 1842 | 
+ 1843 |             features[
+ 1844 |                 "goal_diff_87"
+ 1845 |             ] = abs(
+ 1846 |                 score_home
+ 1847 |                 - score_away
+ 1848 |             )
+ 1849 | 
+ 1850 |             features[
+
+========================================================================
+Tirs recents et tirs cadres
+v41_live87_own_goal_364.py:2185-2245
+========================================================================
+ 2185 |                 last_shot is None
+ 2186 |                 or minute > last_shot
+ 2187 |             ):
+ 2188 |                 last_shot = minute
+ 2189 | 
+ 2190 |             if (
+ 2191 |                 is_sot
+ 2192 |                 and (
+ 2193 |                     last_sot is None
+ 2194 |                     or minute > last_sot
+ 2195 |                 )
+ 2196 |             ):
+ 2197 |                 last_sot = minute
+ 2198 | 
+ 2199 |             if 80 <= minute <= snapshot_minute:
+ 2200 |                 period[
+ 2201 |                     "shots_80_87"
+ 2202 |                 ] += 1
+ 2203 | 
+ 2204 |                 if is_sot:
+ 2205 |                     period[
+ 2206 |                         "sot_80_87"
+ 2207 |                     ] += 1
+ 2208 | 
+ 2209 |         if (
+ 2210 |             shot_count > 0
+ 2211 |             and shot_side_unknown == 0
+ 2212 |         ):
+ 2213 |             features[
+ 2214 |                 "home_shots_87"
+ 2215 |             ] = shot_home[
+ 2216 |                 "shots"
+ 2217 |             ]
+ 2218 | 
+ 2219 |             features[
+ 2220 |                 "away_shots_87"
+ 2221 |             ] = shot_away[
+ 2222 |                 "shots"
+ 2223 |             ]
+ 2224 | 
+ 2225 |             features[
+ 2226 |                 "home_shots_on_target_87"
+ 2227 |             ] = shot_home[
+ 2228 |                 "sot"
+ 2229 |             ]
+ 2230 | 
+ 2231 |             features[
+ 2232 |                 "away_shots_on_target_87"
+ 2233 |             ] = shot_away[
+ 2234 |                 "sot"
+ 2235 |             ]
+ 2236 | 
+ 2237 |             features[
+ 2238 |                 "home_shots_off_target_87"
+ 2239 |             ] = shot_home[
+ 2240 |                 "off_target"
+ 2241 |             ]
+ 2242 | 
+ 2243 |             features[
+ 2244 |                 "away_shots_off_target_87"
+ 2245 |             ] = shot_away[
+
+========================================================================
+Recence du dernier tir cadre
+v41_live87_own_goal_364.py:2315-2360
+========================================================================
+ 2315 |                 "last_shot_minute"
+ 2316 |             ] = last_shot
+ 2317 | 
+ 2318 |             features[
+ 2319 |                 "minutes_since_last_shot"
+ 2320 |             ] = (
+ 2321 |                 snapshot_minute
+ 2322 |                 - last_shot
+ 2323 |             )
+ 2324 | 
+ 2325 |             provenance[
+ 2326 |                 "last_shot_minute"
+ 2327 |             ] = "shotmap_le87"
+ 2328 | 
+ 2329 |             provenance[
+ 2330 |                 "minutes_since_last_shot"
+ 2331 |             ] = "derived_from_shotmap"
+ 2332 | 
+ 2333 |         if last_sot is not None:
+ 2334 |             features[
+ 2335 |                 "last_shot_on_target_minute"
+ 2336 |             ] = last_sot
+ 2337 | 
+ 2338 |             features[
+ 2339 |                 "minutes_since_last_shot_on_target"
+ 2340 |             ] = (
+ 2341 |                 snapshot_minute
+ 2342 |                 - last_sot
+ 2343 |             )
+ 2344 | 
+ 2345 |             provenance[
+ 2346 |                 "last_shot_on_target_minute"
+ 2347 |             ] = "shotmap_le87"
+ 2348 | 
+ 2349 |             provenance[
+ 2350 |                 "minutes_since_last_shot_on_target"
+ 2351 |             ] = "derived_from_shotmap"
+ 2352 | 
+ 2353 |     # -------------------------------------------------------------------------
+ 2354 |     # Timeline shot fallback if shotmap unavailable
+ 2355 |     # -------------------------------------------------------------------------
+ 2356 | 
+ 2357 |     if not shotmap_usable:
+ 2358 |         timeline_shot_events = []
+ 2359 | 
+ 2360 |         for event in timeline_before:
+
+FICHIER VERIFIE : v41_prematch_temporal_adapter_313.py
+Nombre de lignes : 329
+
+========================================================================
+Filtre chronologique isole
+v41_prematch_temporal_adapter_313.py:55-100
+========================================================================
+   55 |         "Appels PRE-MATCH controles :",
+   56 |         len(calls)
+   57 |     )
+   58 | 
+   59 |     return True
+   60 | 
+   61 | 
+   62 | def filter_before_cutoff_v41(
+   63 |     lab,
+   64 |     matches,
+   65 |     cutoff,
+   66 |     target_match_id=None,
+   67 | ):
+   68 |     """
+   69 |     Filtre V4.1 conservateur.
+   70 | 
+   71 |     Un match historique doit avoir commence
+   72 |     strictement plus de 4 heures avant le
+   73 |     kickoff cible.
+   74 | 
+   75 |     Ce n'est pas une preuve d'heure de fin.
+   76 |     """
+   77 |     target_dt = prematch.dt_utc_naive(cutoff)
+   78 | 
+   79 |     if target_dt is None:
+   80 |         raise ValueError(
+   81 |             "V4.1 : cutoff invalide"
+   82 |         )
+   83 | 
+   84 |     safe_cutoff = (
+   85 |         target_dt
+   86 |         - timedelta(hours=MARGIN_HOURS)
+   87 |     )
+   88 | 
+   89 |     return prematch.filter_before_cutoff(
+   90 |         lab,
+   91 |         matches,
+   92 |         safe_cutoff,
+   93 |         target_match_id=target_match_id,
+   94 |     )
+   95 | 
+   96 | 
+   97 | def build_isolated_adapter():
+   98 |     """
+   99 |     Cree une copie fonctionnelle isolee.
+  100 | 
+
+========================================================================
+Branchement de l'adaptateur
+v41_prematch_temporal_adapter_313.py:100-145
+========================================================================
+  100 | 
+  101 |     Aucun remplacement global du filtre dans
+  102 |     le module PRE-MATCH d'origine.
+  103 |     """
+  104 |     verify_source_structure()
+  105 | 
+  106 |     original = prematch.build_prematch_asof
+  107 | 
+  108 |     if (
+  109 |         original.__globals__.get(
+  110 |             "filter_before_cutoff"
+  111 |         )
+  112 |         is not prematch.filter_before_cutoff
+  113 |     ):
+  114 |         raise RuntimeError(
+  115 |             "Binding du filtre original inattendu"
+  116 |         )
+  117 | 
+  118 |     isolated_globals = dict(
+  119 |         original.__globals__
+  120 |     )
+  121 | 
+  122 |     isolated_globals[
+  123 |         "filter_before_cutoff"
+  124 |     ] = filter_before_cutoff_v41
+  125 | 
+  126 |     adapter = types.FunctionType(
+  127 |         original.__code__,
+  128 |         isolated_globals,
+  129 |         name="build_prematch_asof_v41",
+  130 |         argdefs=original.__defaults__,
+  131 |         closure=original.__closure__,
+  132 |     )
+  133 | 
+  134 |     adapter.__kwdefaults__ = (
+  135 |         dict(original.__kwdefaults__)
+  136 |         if original.__kwdefaults__
+  137 |         else None
+  138 |     )
+  139 | 
+  140 |     # Recopier les annotations pour conserver
+  141 |     # la signature inspectable de la fonction.
+  142 |     adapter.__annotations__ = dict(
+  143 |         original.__annotations__
+  144 |     )
+  145 | 
+
+FICHIER VERIFIE : rebuild_clean_prematch_v2.py
+Nombre de lignes : 3694
+
+========================================================================
+Historiques des equipes
+rebuild_clean_prematch_v2.py:1705-1760
+========================================================================
+ 1705 |         "error":
+ 1706 |             "",
+ 1707 |     }
+ 1708 | 
+ 1709 |     # -------------------------------------------------------------------------
+ 1710 |     # Team histories
+ 1711 |     # -------------------------------------------------------------------------
+ 1712 | 
+ 1713 |     home_history_raw = get_team_history(
+ 1714 |         lab,
+ 1715 |         client,
+ 1716 |         home_id,
+ 1717 |         per_page=100,
+ 1718 |     )
+ 1719 | 
+ 1720 |     away_history_raw = get_team_history(
+ 1721 |         lab,
+ 1722 |         client,
+ 1723 |         away_id,
+ 1724 |         per_page=100,
+ 1725 |     )
+ 1726 | 
+ 1727 |     audit[
+ 1728 |         "home_history_raw"
+ 1729 |     ] = len(
+ 1730 |         home_history_raw
+ 1731 |     )
+ 1732 | 
+ 1733 |     audit[
+ 1734 |         "away_history_raw"
+ 1735 |     ] = len(
+ 1736 |         away_history_raw
+ 1737 |     )
+ 1738 | 
+ 1739 |     home_history = filter_before_cutoff(
+ 1740 |         lab,
+ 1741 |         home_history_raw,
+ 1742 |         cutoff,
+ 1743 |         target_match_id=(
+ 1744 |             match_id
+ 1745 |         ),
+ 1746 |     )
+ 1747 | 
+ 1748 |     away_history = filter_before_cutoff(
+ 1749 |         lab,
+ 1750 |         away_history_raw,
+ 1751 |         cutoff,
+ 1752 |         target_match_id=(
+ 1753 |             match_id
+ 1754 |         ),
+ 1755 |     )
+ 1756 | 
+ 1757 |     audit[
+ 1758 |         "home_history_before"
+ 1759 |     ] = len(
+ 1760 |         home_history
+
+========================================================================
+Historique du championnat
+rebuild_clean_prematch_v2.py:1795-1835
+========================================================================
+ 1795 |         lab,
+ 1796 |         away_history,
+ 1797 |         away_id,
+ 1798 |         away_name,
+ 1799 |     )
+ 1800 | 
+ 1801 |     # -------------------------------------------------------------------------
+ 1802 |     # League history BEFORE kickoff
+ 1803 |     # -------------------------------------------------------------------------
+ 1804 | 
+ 1805 |     league_history_raw = (
+ 1806 |         get_league_history(
+ 1807 |             lab,
+ 1808 |             client,
+ 1809 |             competition_id,
+ 1810 |             season_id,
+ 1811 |             per_page=100,
+ 1812 |         )
+ 1813 |         if competition_id
+ 1814 |         else []
+ 1815 |     )
+ 1816 | 
+ 1817 |     audit[
+ 1818 |         "league_history_raw"
+ 1819 |     ] = len(
+ 1820 |         league_history_raw
+ 1821 |     )
+ 1822 | 
+ 1823 |     league_history = filter_before_cutoff(
+ 1824 |         lab,
+ 1825 |         league_history_raw,
+ 1826 |         cutoff,
+ 1827 |         target_match_id=(
+ 1828 |             match_id
+ 1829 |         ),
+ 1830 |     )
+ 1831 | 
+ 1832 |     audit[
+ 1833 |         "league_history_before"
+ 1834 |     ] = len(
+ 1835 |         league_history
+
+========================================================================
+Moyennes de buts
+rebuild_clean_prematch_v2.py:2010-2045
+========================================================================
+ 2010 |                 "form10"
+ 2011 |             ),
+ 2012 |         "home_scored_freq":
+ 2013 |             home_summary.get(
+ 2014 |                 "scored_freq"
+ 2015 |             ),
+ 2016 |         "away_scored_freq":
+ 2017 |             away_summary.get(
+ 2018 |                 "scored_freq"
+ 2019 |             ),
+ 2020 |         "home_wins_freq":
+ 2021 |             home_summary.get(
+ 2022 |                 "wins_freq"
+ 2023 |             ),
+ 2024 |         "away_wins_freq":
+ 2025 |             away_summary.get(
+ 2026 |                 "wins_freq"
+ 2027 |             ),
+ 2028 |         "home_avg_goals_scored":
+ 2029 |             home_summary.get(
+ 2030 |                 "avg_goals_scored"
+ 2031 |             ),
+ 2032 |         "away_avg_goals_scored":
+ 2033 |             away_summary.get(
+ 2034 |                 "avg_goals_scored"
+ 2035 |             ),
+ 2036 |         "home_avg_goals_conceded":
+ 2037 |             home_summary.get(
+ 2038 |                 "avg_goals_conceded"
+ 2039 |             ),
+ 2040 |         "away_avg_goals_conceded":
+ 2041 |             away_summary.get(
+ 2042 |                 "avg_goals_conceded"
+ 2043 |             ),
+ 2044 |         "home_avg_xg":
+ 2045 |             home_summary.get(
+
+FICHIER VERIFIE : v41_prematch_safe_bridge_318.py
+Nombre de lignes : 282
+
+========================================================================
+Debut du bridge
+v41_prematch_safe_bridge_318.py:1-75
+========================================================================
+    1 | import inspect
+    2 | from pathlib import Path
+    3 | 
+    4 | import rebuild_clean_prematch_v2 as prematch
+    5 | 
+    6 | from v41_prematch_temporal_adapter_313 import (
+    7 |     build_isolated_adapter,
+    8 | )
+    9 | 
+   10 | 
+   11 | ODDS_FIELDS = (
+   12 |     "odds_home",
+   13 |     "odds_draw",
+   14 |     "odds_away",
+   15 |     "odds_over05",
+   16 |     "odds_over15",
+   17 |     "odds_over25",
+   18 |     "odds_over35",
+   19 |     "odds_under25",
+   20 |     "odds_btts_yes",
+   21 |     "odds_btts_no",
+   22 | )
+   23 | 
+   24 | 
+   25 | class SafeLabProxy:
+   26 |     """
+   27 |     Module LAB delegue, sauf pour les cotes.
+   28 |     Aucune lecture du endpoint de cotes.
+   29 |     """
+   30 | 
+   31 |     def __init__(self, original_lab):
+   32 |         self._original = original_lab
+   33 |         self.odds_calls_blocked = 0
+   34 | 
+   35 |     def fetch_prematch_odds(
+   36 |         self,
+   37 |         client,
+   38 |         match_id,
+   39 |         preferred_bookmaker=None,
+   40 |     ):
+   41 |         self.odds_calls_blocked += 1
+   42 | 
+   43 |         return {
+   44 |             key: None
+   45 |             for key in ODDS_FIELDS
+   46 |         }
+   47 | 
+   48 |     def __getattr__(self, name):
+   49 |         return getattr(self._original, name)
+   50 | 
+   51 | 
+   52 | class ResearchPrematchProxy:
+   53 |     """
+   54 |     Proxy PRE-MATCH pour la recherche V4.1.
+   55 | 
+   56 |     - Filtre temporel 4 h
+   57 |     - Cache odds independant
+   58 |     - Odds neutralisees
+   59 |     - xG supplementaire interdit
+   60 |     - Seconde periode enrichie interdite
+   61 |     """
+   62 | 
+   63 |     def __init__(self, original_module, original_lab):
+   64 |         self._original = original_module
+   65 |         self.lab = SafeLabProxy(original_lab)
+   66 | 
+   67 |         self._adapter = build_isolated_adapter()
+   68 | 
+   69 |         # Rebinding dans les globals de la copie
+   70 |         # fonctionnelle uniquement.
+   71 |         self._adapter.__globals__["ODDS_CACHE"] = {}
+   72 | 
+   73 |         original_cache = (
+   74 |             original_module.build_prematch_asof
+   75 |             .__globals__["ODDS_CACHE"]
+
+========================================================================
+POINTS A CERTIFIER
+========================================================================
+1. Filtrage strict des evenements a 87 minutes
+2. Traitement correct des minutes 87+ / 90+
+3. Aucun tir ou corner futur dans les cumuls
+4. Dernier tir cadre limite a la coupure
+5. Historiques prematch anterieurs au coup d'envoi
+6. Bridge et adaptateur effectivement utilises
+7. Disponibilite reelle des donnees dans le live
+
+Aucune certification automatique.
+Aucun label de validation consulte.
+Aucun fichier de donnees ouvert.
+Aucune prediction modifiee.
+Aucun appel API.
+ETAPE 393 TERMINEE.

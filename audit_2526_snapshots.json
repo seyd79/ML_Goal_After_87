@@ -1,0 +1,17 @@
+{
+  "rows": 2526,
+  "unique_matches": 1001,
+  "duplicate_match_minute": 62,
+  "minutes": {
+    "85": 821,
+    "87": 899,
+    "86": 806
+  },
+  "future_event_minutes": {
+    "last_shot_minute": 104,
+    "last_shot_on_target_minute": 51,
+    "last_corner_minute": 72,
+    "last_goal_minute": 25
+  },
+  "new_features_present": false
+}

@@ -1,0 +1,20 @@
+{
+  "match_id": "mt_example",
+  "minute": 87,
+  "feature_logic_version": "pressure_asof_v1_completed_minutes",
+  "pressure_source": "HISTORICAL_DIAGNOSTIC_ONLY",
+  "events_available_at_snapshot": false,
+  "pressure_status": "VALID_HISTORICAL_DIAGNOSTIC_ONLY",
+  "events_timeline_count": 6,
+  "events_in_window": 4,
+  "events_unknown_team": 0,
+  "events_unknown_type": 0,
+  "events_future_filtered": 1,
+  "events_invalid_minute": 0,
+  "shots_home_last5": 2,
+  "shots_away_last5": 1,
+  "sot_home_last5": 1,
+  "sot_away_last5": 1,
+  "corners_home_last5": 1,
+  "corners_away_last5": 0
+}

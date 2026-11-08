@@ -1,0 +1,573 @@
+==============================================================================
+GOAL AFTER 87 — ETAPE 394
+AUDIT STATIQUE TEMPOREL — LECTURE SEULE
+==============================================================================
+[OK] collect_historical_dataset_v2.py | 2107 lignes
+[OK] v41_live87_own_goal_364.py | 4303 lignes
+[OK] v41_prematch_temporal_adapter_313.py | 329 lignes
+[OK] rebuild_clean_prematch_v2.py | 3694 lignes
+[OK] v41_prematch_safe_bridge_318.py | 282 lignes
+
+==============================================================================
+1 — EXTRACTION EXACTE DES MINUTES
+==============================================================================
+
+--- extract_event_minute (lignes 875-958) ---
+  875 | def extract_event_minute(
+  876 |     event: Mapping[str, Any],
+  877 | ) -> Optional[int]:
+  878 |     values = [
+  879 |         event.get(
+  880 |             "minute"
+  881 |         ),
+  882 |         event.get(
+  883 |             "elapsed"
+  884 |         ),
+  885 |         event.get(
+  886 |             "time"
+  887 |         ),
+  888 |         event.get(
+  889 |             "match_minute"
+  890 |         ),
+  891 |         event.get(
+  892 |             "event_minute"
+  893 |         ),
+  894 |     ]
+  895 | 
+  896 |     time_obj = event.get(
+  897 |         "time"
+  898 |     )
+  899 | 
+  900 |     if isinstance(
+  901 |         time_obj,
+  902 |         Mapping,
+  903 |     ):
+  904 |         values = [
+  905 |             time_obj.get(
+  906 |                 "minute"
+  907 |             ),
+  908 |             time_obj.get(
+  909 |                 "elapsed"
+  910 |             ),
+  911 |         ] + values
+  912 | 
+  913 |     for value in values:
+  914 |         if isinstance(
+  915 |             value,
+  916 |             Mapping,
+  917 |         ):
+  918 |             continue
+  919 | 
+  920 |         if isinstance(
+  921 |             value,
+  922 |             str,
+  923 |         ):
+  924 |             text = value.strip()
+  925 | 
+  926 |             # "90+4", "87'", "45 + 2"
+  927 |             match = re.search(
+  928 |                 r"(\d+)\s*(?:\+\s*(\d+))?",
+  929 |                 text,
+  930 |             )
+  931 | 
+  932 |             if match:
+  933 |                 base = int(
+  934 |                     match.group(
+  935 |                         1
+  936 |                     )
+  937 |                 )
+  938 | 
+  939 |                 extra = int(
+  940 |                     match.group(
+  941 |                         2
+  942 |                     )
+  943 |                     or 0
+  944 |                 )
+  945 | 
+  946 |                 return (
+  947 |                     base
+  948 |                     + extra
+  949 |                 )
+  950 | 
+  951 |         parsed = safe_int(
+  952 |             value
+  953 |         )
+  954 | 
+  955 |         if parsed is not None:
+  956 |             return parsed
+  957 | 
+  958 |     return None
+
+==============================================================================
+2 — FONCTIONS DE RECONSTRUCTION ET DE COUPURE
+==============================================================================
+Fonction : lignes 1573-2533
+ 1602 |     features: Dict[str, Any] = {}
+ 1603 |     provenance: Dict[str, str] = {}
+ 1604 | 
+ 1605 |     timeline_before = []
+ 1606 | 
+ 1607 |     for event in timeline_events:
+ 1608 |         minute = extract_event_minute(
+ 1609 |             event
+ 1610 |         )
+ 1612 |         if minute is None:
+ 1613 |             continue
+ 1614 | 
+ 1615 |         if minute > snapshot_minute:
+ 1616 |             continue
+ 1617 | 
+ 1618 |         timeline_before.append(
+ 1619 |             event
+ 1620 |         )
+ 1621 | 
+ 1622 |     shots_before = []
+ 1623 | 
+ 1624 |     for event in shot_events:
+ 1625 |         minute = extract_event_minute(
+ 1626 |             event
+ 1627 |         )
+ 1629 |         if minute is None:
+ 1630 |             continue
+ 1631 | 
+ 1632 |         if minute > snapshot_minute:
+ 1633 |             continue
+ 1634 | 
+ 1635 |         shots_before.append(
+ 1636 |             event
+ 1637 |         )
+ 1638 | 
+ 1639 |     home = initialize_counter()
+ 1640 |     away = initialize_counter()
+ 1644 | 
+ 1645 |     last_goal = None
+ 1646 |     last_shot = None
+ 1647 |     last_sot = None
+ 1648 |     last_corner = None
+ 1649 | 
+ 1650 |     period = {
+ 1651 |         "shots_80_87": 0,
+ 1652 |         "sot_80_87": 0,
+ 1663 |     # Timeline
+ 1664 |     # -------------------------------------------------------------------------
+ 1665 | 
+ 1666 |     for event in timeline_before:
+ 1667 |         minute = extract_event_minute(
+ 1668 |             event
+ 1669 |         )
+ 1670 | 
+ 1671 |         if minute is None:
+ 1786 |                 "offsides"
+ 1787 |             ] += 1
+ 1788 | 
+ 1789 |         if 80 <= minute <= snapshot_minute:
+ 1790 |             if flags[
+ 1791 |                 "corner"
+ 1792 |             ]:
+ 1793 |                 period[
+ 1794 |                     "corners_80_87"
+ 1883 |     # We cannot prove 0-0 merely because no goal event exists unless the timeline
+ 1884 |     # itself looks active/complete. This audit deliberately stays conservative.
+ 1885 |     elif len(
+ 1886 |         timeline_before
+ 1887 |     ) >= 10:
+ 1888 |         features[
+ 1889 |             "score_87_home"
+ 1890 |         ] = 0
+ 1891 | 
+ 2095 |     # Shotmap — preferred source for shots
+ 2096 |     # -------------------------------------------------------------------------
+ 2097 | 
+ 2098 |     shotmap_usable = (
+ 2099 |         len(
+ 2100 |             shots_before
+ 2101 |         ) > 0
+ 2102 |     )
+ 2103 | 
+ 2104 |     if shotmap_usable:
+ 2105 |         shot_home = initialize_counter()
+ 2106 |         shot_away = initialize_counter()
+ 2107 | 
+ 2108 |         shot_side_unknown = 0
+ 2109 |         shot_count = 0
+ 2110 |         sot_count = 0
+ 2111 | 
+ 2112 |         for event in shots_before:
+ 2113 |             minute = extract_event_minute(
+ 2114 |                 event
+ 2115 |             )
+ 2116 | 
+ 2117 |             if minute is None:
+ 2190 |             if (
+ 2191 |                 is_sot
+ 2192 |                 and (
+ 2193 |                     last_sot is None
+ 2194 |                     or minute > last_sot
+ 2195 |                 )
+ 2196 |             ):
+ 2197 |                 last_sot = minute
+ 2198 | 
+ 2199 |             if 80 <= minute <= snapshot_minute:
+ 2200 |                 period[
+ 2201 |                     "shots_80_87"
+ 2202 |                 ] += 1
+ 2203 | 
+ 2204 |                 if is_sot:
+ 2330 |                 "minutes_since_last_shot"
+ 2331 |             ] = "derived_from_shotmap"
+ 2332 | 
+ 2333 |         if last_sot is not None:
+ 2334 |             features[
+ 2335 |                 "last_shot_on_target_minute"
+ 2336 |             ] = last_sot
+ 2337 | 
+ 2338 |             features[
+ 2339 |                 "minutes_since_last_shot_on_target"
+ 2340 |             ] = (
+ 2341 |                 snapshot_minute
+ 2342 |                 - last_sot
+ 2343 |             )
+ 2344 | 
+ 2345 |             provenance[
+ 2346 |                 "last_shot_on_target_minute"
+ 2347 |             ] = "shotmap_le87"
+ 2354 |     # Timeline shot fallback if shotmap unavailable
+ 2355 |     # -------------------------------------------------------------------------
+ 2356 | 
+ 2357 |     if not shotmap_usable:
+ 2358 |         timeline_shot_events = []
+ 2359 | 
+ 2360 |         for event in timeline_before:
+ 2361 |             flags = event_flags(
+ 2362 |                 event
+ 2363 |             )
+ 2364 | 
+ 2365 |             if flags[
+ 2366 |                 "shot"
+ 2367 |             ]:
+ 2368 |                 timeline_shot_events.append(
+ 2369 |                     event
+ 2370 |                 )
+ 2371 | 
+ 2372 |         if timeline_shot_events:
+ 2373 |             shot_home = 0
+ 2374 |             shot_away = 0
+ 2375 |             sot_home = 0
+ 2376 |             sot_away = 0
+ 2377 |             unknown = 0
+ 2378 |             recent_shots = 0
+ 2379 |             recent_sot = 0
+ 2380 | 
+ 2381 |             for event in timeline_shot_events:
+ 2382 |                 minute = extract_event_minute(
+ 2383 |                     event
+ 2384 |                 )
+ 2385 | 
+ 2386 |                 if minute is None:
+ 2426 |                         "sot"
+ 2427 |                     ]
+ 2428 |                     and (
+ 2429 |                         last_sot is None
+ 2430 |                         or minute > last_sot
+ 2431 |                     )
+ 2432 |                 ):
+ 2433 |                     last_sot = minute
+ 2434 | 
+ 2435 |                 if 80 <= minute <= snapshot_minute:
+ 2436 |                     recent_shots += 1
+ 2437 | 
+ 2438 |                     if flags[
+ 2439 |                         "sot"
+ 2440 |                     ]:
+ 2503 |                     "derived_timeline_shot_fallback"
+ 2504 |                 )
+ 2505 | 
+ 2506 |             if last_sot is not None:
+ 2507 |                 features[
+ 2508 |                     "last_shot_on_target_minute"
+ 2509 |                 ] = last_sot
+ 2510 | 
+ 2511 |                 features[
+ 2512 |                     "minutes_since_last_shot_on_target"
+ 2513 |                 ] = (
+ 2514 |                     snapshot_minute
+ 2515 |                     - last_sot
+ 2516 |                 )
+ 2517 | 
+ 2518 |                 provenance[
+ 2519 |                     "last_shot_on_target_minute"
+ 2520 |                 ] = (
+
+==============================================================================
+3 — BRANCHEMENT EFFECTIF DU PREMATCH
+==============================================================================
+
+--- collect_historical_dataset_v2.py ---
+ 1319 |     # -------------------------------------------------------------------------
+ 1320 | 
+ 1321 |     pre_features, pre_audit = prematch.build_prematch_asof(
+ 1322 |         lab=prematch.lab,
+ 1323 |         client=client,
+ 1324 |         target_match=target_match,
+ 1753 | 
+ 1754 |     # Modules
+ 1755 |     prematch = load_module(
+ 1756 |         "prematch_rebuild_runtime",
+ 1757 |         PREMATCH_MODULE_PATH,
+ 1758 |     )
+ 1892 |         try:
+ 1893 |             row, status_row = collect_one_match(
+ 1894 |                 prematch=prematch,
+ 1895 |                 live87=live87,
+ 1896 |                 client=client,
+ 1897 |                 match_stub=stub,
+
+--- v41_live87_own_goal_364.py ---
+Aucune reference directe trouvee.
+
+--- v41_prematch_temporal_adapter_313.py ---
+   27 |         if (
+   28 |             isinstance(node, ast.FunctionDef)
+   29 |             and node.name == "build_prematch_asof"
+   30 |         ):
+   31 |             target = node
+   32 |             break
+   34 |     if target is None:
+   35 |         raise RuntimeError(
+   36 |             "build_prematch_asof introuvable"
+   37 |         )
+   38 | 
+   39 |     calls = [
+   42 |         if isinstance(node, ast.Call)
+   43 |         and isinstance(node.func, ast.Name)
+   44 |         and node.func.id == "filter_before_cutoff"
+   45 |     ]
+   46 | 
+   47 |     if len(calls) != 3:
+   60 | 
+   61 | 
+   62 | def filter_before_cutoff_v41(
+   63 |     lab,
+   64 |     matches,
+   65 |     cutoff,
+   87 |     )
+   88 | 
+   89 |     return prematch.filter_before_cutoff(
+   90 |         lab,
+   91 |         matches,
+   92 |         safe_cutoff,
+   95 | 
+   96 | 
+   97 | def build_isolated_adapter():
+   98 |     """
+   99 |     Cree une copie fonctionnelle isolee.
+  100 | 
+  104 |     verify_source_structure()
+  105 | 
+  106 |     original = prematch.build_prematch_asof
+  107 | 
+  108 |     if (
+  109 |         original.__globals__.get(
+  110 |             "filter_before_cutoff"
+  111 |         )
+  112 |         is not prematch.filter_before_cutoff
+  113 |     ):
+  114 |         raise RuntimeError(
+  115 |             "Binding du filtre original inattendu"
+  121 | 
+  122 |     isolated_globals[
+  123 |         "filter_before_cutoff"
+  124 |     ] = filter_before_cutoff_v41
+  125 | 
+  126 |     adapter = types.FunctionType(
+  127 |         original.__code__,
+  128 |         isolated_globals,
+  129 |         name="build_prematch_asof_v41",
+  130 |         argdefs=original.__defaults__,
+  131 |         closure=original.__closure__,
+  132 |     )
+  154 |     if (
+  155 |         adapter.__globals__[
+  156 |             "filter_before_cutoff"
+  157 |         ]
+  158 |         is not filter_before_cutoff_v41
+  159 |     ):
+  160 |         raise RuntimeError(
+  161 |             "Filtre V4.1 non branche"
+  163 | 
+  164 |     if (
+  165 |         prematch.build_prematch_asof
+  166 |         is not original
+  167 |         or original.__globals__[
+  168 |             "filter_before_cutoff"
+  169 |         ]
+  170 |         is not prematch.filter_before_cutoff
+  171 |     ):
+  172 |         raise RuntimeError(
+  173 |             "Le module original a ete modifie"
+  186 | 
+  187 | def offline_test():
+  188 |     adapter = build_isolated_adapter()
+  189 | 
+  190 |     target = datetime(
+  191 |         2026, 5, 10, 18, 0
+  240 |     ):
+  241 |         original_rows = (
+  242 |             prematch.filter_before_cutoff(
+  243 |                 FakeLab(),
+  244 |                 history,
+  245 |                 target,
+  250 |         guarded_rows = (
+  251 |             adapter.__globals__[
+  252 |                 "filter_before_cutoff"
+  253 |             ](
+  254 |                 FakeLab(),
+  255 |                 history,
+  284 | 
+  285 |     assert (
+  286 |         prematch.build_prematch_asof.__globals__[
+  287 |             "filter_before_cutoff"
+  288 |         ]
+  289 |         is prematch.filter_before_cutoff
+  290 |     )
+  291 | 
+  292 |     assert (
+  293 |         adapter.__globals__[
+  294 |             "filter_before_cutoff"
+  295 |         ]
+  296 |         is filter_before_cutoff_v41
+  297 |     )
+  298 | 
+  299 |     print("Filtre original inchange : OK")
+
+--- rebuild_clean_prematch_v2.py ---
+  919 | 
+  920 | 
+  921 | def filter_before_cutoff(
+  922 |     lab,
+  923 |     matches: Sequence[
+  924 |         Mapping[str, Any]
+ 1595 | # =============================================================================
+ 1596 | 
+ 1597 | def build_prematch_asof(
+ 1598 |     lab,
+ 1599 |     client,
+ 1600 |     target_match: Mapping[str, Any],
+ 1737 |     )
+ 1738 | 
+ 1739 |     home_history = filter_before_cutoff(
+ 1740 |         lab,
+ 1741 |         home_history_raw,
+ 1742 |         cutoff,
+ 1746 |     )
+ 1747 | 
+ 1748 |     away_history = filter_before_cutoff(
+ 1749 |         lab,
+ 1750 |         away_history_raw,
+ 1751 |         cutoff,
+ 1821 |     )
+ 1822 | 
+ 1823 |     league_history = filter_before_cutoff(
+ 1824 |         lab,
+ 1825 |         league_history_raw,
+ 1826 |         cutoff,
+ 3261 |             )
+ 3262 | 
+ 3263 |             prematch, audit = build_prematch_asof(
+ 3264 |                 lab=lab,
+ 3265 |                 client=client,
+ 3266 |                 target_match=target_match,
+
+--- v41_prematch_safe_bridge_318.py ---
+    5 | 
+    6 | from v41_prematch_temporal_adapter_313 import (
+    7 |     build_isolated_adapter,
+    8 | )
+    9 | 
+   10 | 
+   50 | 
+   51 | 
+   52 | class ResearchPrematchProxy:
+   53 |     """
+   54 |     Proxy PRE-MATCH pour la recherche V4.1.
+   55 | 
+   65 |         self.lab = SafeLabProxy(original_lab)
+   66 | 
+   67 |         self._adapter = build_isolated_adapter()
+   68 | 
+   69 |         # Rebinding dans les globals de la copie
+   70 |         # fonctionnelle uniquement.
+   72 | 
+   73 |         original_cache = (
+   74 |             original_module.build_prematch_asof
+   75 |             .__globals__["ODDS_CACHE"]
+   76 |         )
+   77 | 
+  101 |             )
+  102 | 
+  103 |     def build_prematch_asof(
+  104 |         self,
+  105 |         lab,
+  106 |         client,
+  146 |     print("=" * 78)
+  147 | 
+  148 |     original_function = prematch.build_prematch_asof
+  149 |     original_cache = (
+  150 |         original_function.__globals__["ODDS_CACHE"]
+  151 |     )
+  160 | 
+  161 |     lab = FakeLab()
+  162 |     proxy = ResearchPrematchProxy(prematch, lab)
+  163 | 
+  164 |     isolated = proxy._adapter
+  165 |     isolated_cache = isolated.__globals__["ODDS_CACHE"]
+  182 | 
+  183 |     assert (
+  184 |         isolated.__globals__["filter_before_cutoff"]
+  185 |         is not prematch.filter_before_cutoff
+  186 |     )
+  187 | 
+  188 |     assert proxy.lab.marker == "delegation_ok"
+  249 | 
+  250 |         try:
+  251 |             proxy.build_prematch_asof(**test_kwargs)
+  252 |         except ValueError:
+  253 |             print(changed, ": correctement bloque")
+  254 |         else:
+
+==============================================================================
+4 — INVENTAIRE DES REFERENCES TEMPORELLES
+==============================================================================
+
+[MINUTES ET PROLONGATIONS]
+collect_historical_dataset_v2.py: {'extract_event_minute': 1, 'snapshot_minute': 7}
+v41_live87_own_goal_364.py: {'extract_event_minute': 7, 'snapshot_minute': 17, 'elapsed': 5}
+rebuild_clean_prematch_v2.py: {'snapshot_minute': 1, 'elapsed': 3}
+
+[RECONSTRUCTION LIVE]
+collect_historical_dataset_v2.py: {'reconstruct_from_events': 1, 'corners_80_87': 2}
+v41_live87_own_goal_364.py: {'reconstruct_from_events': 2, 'shotmap_usable': 3, 'timeline_before': 5, 'shots_before': 4, 'last_sot': 13, 'corners_80_87': 6}
+rebuild_clean_prematch_v2.py: {'corners_80_87': 1}
+
+[PREMATCH ET BRIDGE]
+collect_historical_dataset_v2.py: {'build_prematch_asof': 1}
+v41_prematch_temporal_adapter_313.py: {'build_prematch_asof': 6, 'build_isolated_adapter': 2, 'filter_before_cutoff': 17, 'safe_cutoff': 2, 'MARGIN_HOURS': 2}
+rebuild_clean_prematch_v2.py: {'build_prematch_asof': 2, 'filter_before_cutoff': 4}
+v41_prematch_safe_bridge_318.py: {'build_prematch_asof': 4, 'ResearchPrematchProxy': 2, 'build_isolated_adapter': 2, 'filter_before_cutoff': 2}
+
+==============================================================================
+5 — RISQUES A VERIFIER
+==============================================================================
+[A VERIFIER] 1. 87+1 / 90+ : representation et parsing exacts
+[A VERIFIER] 2. Evenements de minute 87 : ordre et heure reelle
+[A VERIFIER] 3. Tirs et corners : absence de valeurs finales reutilisees
+[A VERIFIER] 4. Dernier tir cadre : minute valide et source temporelle
+[A VERIFIER] 5. PREMATCH : utilisation effective du bridge
+[A VERIFIER] 6. Historiques : disponibilite avant kickoff
+[A VERIFIER] 7. LIVE : disponibilite reelle des informations a 87'
+
+Aucun label consulte.
+Aucune prediction modifiee.
+Aucun appel API effectue par ce script.
+Aucune certification automatique.
+ETAPE 394 — INSPECTION TERMINEE.

@@ -1,0 +1,19 @@
+V3-C — Etape 7 — Controle /timeline vs /stats (TheStatsAPI)
+
+1. Dezipper dans le dossier du projet ML_Goal_After_87: (avec scripts a la racine).
+2. Tests :
+   ./.venv/bin/python test_crosscheck_timeline_stats_v3c.py
+3. Cinq nouvelles requetes /stats (seuls les matchs dont la timeline est deja cachee) :
+   ./.venv/bin/python crosscheck_timeline_stats_v3c.py --manifest historical_1710_manifest.csv --outdir outputs/pressure_historical --limit 5 --delay 1
+4. Quand la sortie est satisfaisante, poursuivre les autres matchs deja caches :
+   ./.venv/bin/python crosscheck_timeline_stats_v3c.py --manifest historical_1710_manifest.csv --outdir outputs/pressure_historical --limit 10 --delay 1
+5. Reconstruire en joignant les comptes de reference du meme fournisseur :
+   ./.venv/bin/python rebuild_historical_pressure.py rebuild --manifest historical_1710_manifest.csv --outdir outputs/pressure_historical --official-stats outputs/pressure_historical/official_stats_api.csv
+
+Fichiers de sortie :
+ outputs/pressure_historical/timeline_stats_crosscheck.csv
+ outputs/pressure_historical/official_stats_api.csv
+ outputs/pressure_historical/timeline_stats_crosscheck_summary.json
+
+ATTENTION : la concordance de deux endpoints du MEME fournisseur n'est PAS une validation independante.
+Les 6 nouvelles features restent experimentales tant que la chronologie/disponibilite temps reel, la qualite des labels et la generalisation ne sont pas validees.
